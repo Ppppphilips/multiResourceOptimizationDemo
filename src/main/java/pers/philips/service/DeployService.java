@@ -168,6 +168,7 @@ public class DeployService {
     {
         int instanceId = getInstanceToAttach(ATTACH_FLG);
         InstanceModel insToAttach = createInstanceByModelId(instanceId);
+        printInputInfo(insToAttach,ATTACH_FLG);
         // 计算剩余资源可分配的物理机
         calAvailServersForAttach(insToAttach);
         calAvailServersUnderHA(instanceId);
@@ -176,6 +177,8 @@ public class DeployService {
         int bestIdx = getBestIndex(dvsDiff);
         int serverId = this.servers.get(bestIdx).getServerId();
         System.out.println("模组" + instanceId + "应部署在服务器" + serverId + "上" );
+        //printDetailInformation();
+
     }
 
     /**
@@ -305,4 +308,15 @@ public class DeployService {
         }
         return idx;
     }
+
+    private void printInputInfo(InstanceModel ins, boolean attachFlg)
+    {
+        if(attachFlg == ATTACH_FLG)
+        System.out.println("导入模组id:" + ins.getModelId());
+        System.out.println("预期使用CPU" + ins.getCpuExpect() + "个");
+        System.out.println("预期使用内存" + ins.getMemExpect() + "MB");
+        System.out.println("预期使用硬盘" + ins.getHdExpect() + "GB");
+        System.out.println("预期使用带宽" + ins.getNwExpect() + "MB");
+    }
+
 }
