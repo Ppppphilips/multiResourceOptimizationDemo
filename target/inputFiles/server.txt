@@ -1,0 +1,4 @@
+#服务器编号,CPU实际使用率,内存实际使用率,硬盘实际使用率,CPU实际使用率,网络实际使用率,已部署的instance数据（模组id:数量）
+{"id":1,"cpuUsage":0.5,"memUsage":0.5,"hdUsage":0.5,"nwUsage":0.5,"instances":{"1":2,"2":3,"3":2}}
+{"id":2,"cpuUsage":0.3,"memUsage":0.6,"hdUsage":0.3,"nwUsage":0.1,"instances":{"1":4,"2":2,"3":3}}
+{"id":3,"cpuUsage":0.36,"memUsage":0.64,"hdUsage":0.13,"nwUsage":0.21,"instances":{"1":4,"2":7}}
