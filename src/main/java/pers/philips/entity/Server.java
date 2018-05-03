@@ -81,6 +81,16 @@ public class Server {
         this.nwUsage = nwUsage;
     }
 
+
+    /**
+     * 已部署的instance数量
+     * @return
+     */
+    public int getDeployedInstanceNum()
+    {
+        return this.instances.size();
+    }
+
     /**
      * 部署instance
      * @param ins
@@ -124,7 +134,6 @@ public class Server {
         {
             if(iIns.next().getModelId() == mid)
             {
-                iIns.remove();
                 result++;
             }
         }
@@ -220,5 +229,6 @@ public class Server {
     {
         return 1D - ((double)(getNwAvail() - ins.getNwExpect()) / (double)nwTotal);
     }
+
 
 }

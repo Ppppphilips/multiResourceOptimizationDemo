@@ -17,8 +17,8 @@ import java.util.Map;
 public class DeployService {
     private ArrayList<InstanceModel> models = new ArrayList<InstanceModel>();  //所有的模组信息
     private ArrayList<Server> servers = new ArrayList<Server>();        //所有现有的物理机
-//    private ArrayList<Server> availServers = new ArrayList<Server>();   //剩余资源可分配的物理机
-//    private ArrayList<Server> availServersUnderHA = new ArrayList<Server>();    //满足高可用条件的物理机
+    private ArrayList<Server> serversForAttach = new ArrayList<Server>();   //可供扩容的物理机
+    private ArrayList<Server> serversForDetach = new ArrayList<Server>();    //可供缩容的物理机
     private static final boolean ATTACH_FLG= true;
     private static final boolean DETACH_FLG= false;
 
@@ -35,6 +35,9 @@ public class DeployService {
         {
             System.out.println("initServersInstances failed");
         }
+
+        this.serversForAttach = new ArrayList<Server>(this.servers);
+        this.serversForDetach = new ArrayList<Server>(this.servers);
     }
 
     /**
@@ -128,7 +131,7 @@ public class DeployService {
      * @param attachFlg 值为true时获取缩容模组id,false则获取缩容的模组id
      * @return
      */
-    private int getInstanceToAttach(boolean attachFlg)
+    private int getInstanceForDeploy(boolean attachFlg)
     {
         int instanceId = 0;
         String fileName = null;
@@ -166,49 +169,55 @@ public class DeployService {
      */
     public void getAttachSolution()
     {
-        int instanceId = getInstanceToAttach(ATTACH_FLG);
+        int instanceId = getInstanceForDeploy(ATTACH_FLG);
         InstanceModel insToAttach = createInstanceByModelId(instanceId);
         printInputInfo(insToAttach,ATTACH_FLG);
-        // 计算剩余资源可分配的物理机
+        // 计算剩余资源可扩容的物理机
         calAvailServersForAttach(insToAttach);
-        calAvailServersUnderHA(instanceId);
+        // 计算符合高可用条件可扩容的物理机
+        calAvailServersUnderHAForAttach(instanceId);
+        if(this.serversForAttach.size() == 0)
+        {
+            System.out.println("需要新增物理机后再部署模组" + instanceId );
+            return;
+        }
         // 计算标准差的改善值
         ArrayList<Double> dvsDiff = calDeviationDiff(calCurrentDeviation(),calDeployedDeviation(insToAttach));
         int bestIdx = getBestIndex(dvsDiff);
-        int serverId = this.servers.get(bestIdx).getServerId();
+        int serverId = this.serversForAttach.get(bestIdx).getServerId();
         System.out.println("模组" + instanceId + "应部署在服务器" + serverId + "上" );
         //printDetailInformation();
 
     }
 
     /**
-     * 计算剩余资源可分配的物理机
+     * 计算剩余资源可扩容的物理机
      * @param ins
      * @return
      */
     private boolean calAvailServersForAttach(InstanceModel ins)
     {
-        Iterator<Server> iServer = this.servers.iterator();
+        Iterator<Server> iServer = this.serversForAttach.iterator();
         while(iServer.hasNext())
         {
             Server server = iServer.next();
             if(! server.attachable(ins))
             {
-                this.servers.remove(server);
+                this.serversForAttach.remove(server);
             }
         }
         return true;
     }
 
     /**
-     * 计算符合高可用条件的物理机
+     * 计算符合高可用条件可扩容的物理机
      * @param mid
      * @return
      */
-    private boolean calAvailServersUnderHA(int mid)
+    private boolean calAvailServersUnderHAForAttach(int mid)
     {
         int deployedNum = 0;
-        Iterator<Server> iServer= this.servers.iterator();
+        Iterator<Server> iServer= this.serversForAttach.iterator();
         ArrayList<Server> undeployedServers = new ArrayList<Server>();
         while(iServer.hasNext())
         {
@@ -224,7 +233,7 @@ public class DeployService {
         }
         if(deployedNum < Integer.parseInt(Constants.getProperty("haNum")))
         {
-            this.servers = new ArrayList<Server>(undeployedServers);
+            this.serversForAttach = new ArrayList<Server>(undeployedServers);
         }
         return true;
     }
@@ -237,7 +246,7 @@ public class DeployService {
     private ArrayList<Double> calCurrentDeviation()
     {
         ArrayList<Double> curDvs = new ArrayList<Double>();
-        Iterator<Server> iServer= this.servers.iterator();
+        Iterator<Server> iServer= this.serversForAttach.iterator();
         while(iServer.hasNext())
         {
             Server server = iServer.next();
@@ -259,7 +268,7 @@ public class DeployService {
     private ArrayList<Double> calDeployedDeviation(InstanceModel ins)
     {
         ArrayList<Double> afterDvs = new ArrayList<Double>();
-        Iterator<Server> iServer= this.servers.iterator();
+        Iterator<Server> iServer= this.serversForAttach.iterator();
         while(iServer.hasNext())
         {
             Server server = iServer.next();
@@ -284,7 +293,7 @@ public class DeployService {
         int i;
         for(i = 0; i < curDvs.size(); i++)
         {
-            dvsDiff.add(afterDvs.get(i) - curDvs.get(i));
+            dvsDiff.add( curDvs.get(i) - afterDvs.get(i));
         }
         return dvsDiff;
     }
@@ -309,14 +318,116 @@ public class DeployService {
         return idx;
     }
 
-    private void printInputInfo(InstanceModel ins, boolean attachFlg)
+
+    /**
+     * 计算缩容方案
+     * @return
+     */
+    public void getDetachSolution()
     {
-        if(attachFlg == ATTACH_FLG)
-        System.out.println("导入模组id:" + ins.getModelId());
-        System.out.println("预期使用CPU" + ins.getCpuExpect() + "个");
-        System.out.println("预期使用内存" + ins.getMemExpect() + "MB");
-        System.out.println("预期使用硬盘" + ins.getHdExpect() + "GB");
-        System.out.println("预期使用带宽" + ins.getNwExpect() + "MB");
+        int instanceId = getInstanceForDeploy(DETACH_FLG);
+        InstanceModel insToDetach = createInstanceByModelId(instanceId);
+        printInputInfo(insToDetach,DETACH_FLG);
+        // 计算剩余资源可缩容的物理机
+        calAvailServersForDetach(instanceId);
+        // 计算符合高可用条件可缩容的物理机
+        calAvailServersUnderHAForDetach(instanceId);
+        if(this.serversForDetach.size() == 0)
+        {
+            System.out.println("很抱歉，没有符合条件的缩容方案");
+            return;
+        }
+        // 计算最优缩容方案
+        int leastNum = 99999;
+        int serverId= -1;
+
+        Iterator<Server> iServer = this.serversForDetach.iterator();
+        while(iServer.hasNext())
+        {
+            Server server = iServer.next();
+            if(server.getDeployedInstanceNum() < leastNum)
+            {
+                leastNum = server.getDeployedInstanceNum();
+                serverId = server.getServerId();
+            }
+        }
+        System.out.println("模组" + instanceId + "应从服务器" + serverId + "上缩容" );
+
+
+    }
+
+    /**
+     * 获取可缩容的服务器
+     * @param mid
+     */
+    private void calAvailServersForDetach(int mid)
+    {
+        Iterator<Server> iServer= this.serversForDetach.iterator();
+        while(iServer.hasNext())
+        {
+            Server server = iServer.next();
+            if(server.countInstanceByModelId(mid) == 0)
+            {
+                iServer.remove();
+            }
+        }
+    }
+
+    /**
+     * 获取可缩容并且满足高可用条件的服务器
+     * @param mid
+     */
+    private void calAvailServersUnderHAForDetach(int mid)
+    {
+        int deployedNum = 0;
+        Iterator<Server> iServer= this.serversForDetach.iterator();
+        ArrayList<Server> multiDeployedServers = new ArrayList<Server>();
+        while(iServer.hasNext())
+        {
+            Server server = iServer.next();
+            if(server.countInstanceByModelId(mid) > 1)
+            {
+                multiDeployedServers.add(server);
+                deployedNum++;
+            }
+            else if(server.countInstanceByModelId(mid) == 1)
+            {
+                deployedNum++;
+            }
+            else
+            {
+                iServer.remove();
+            }
+        }
+        if(deployedNum == Integer.parseInt(Constants.getProperty("haNum")))
+        {
+            this.serversForDetach = new ArrayList<Server>(multiDeployedServers);
+        }
+        if(deployedNum < Integer.parseInt(Constants.getProperty("haNum")))
+        {
+            System.out.println("当前环境不符合高可用条件");
+            this.serversForDetach = new ArrayList<Server>();
+        }
+    }
+
+    private void printInputInfo(InstanceModel ins, boolean attachFlg) {
+        if (attachFlg == ATTACH_FLG)
+        {
+            System.out.println("扩容模组id:" + ins.getModelId());
+            System.out.println("预期使用CPU" + ins.getCpuExpect() + "个");
+            System.out.println("预期使用内存" + ins.getMemExpect() + "MB");
+            System.out.println("预期使用硬盘" + ins.getHdExpect() + "GB");
+            System.out.println("预期使用带宽" + ins.getNwExpect() + "MB");
+        }
+        else
+        {
+            System.out.println("缩容模组id:" + ins.getModelId());
+            System.out.println("预期释放CPU" + ins.getCpuExpect() + "个");
+            System.out.println("预期释放内存" + ins.getMemExpect() + "MB");
+            System.out.println("预期释放硬盘" + ins.getHdExpect() + "GB");
+            System.out.println("预期释放带宽" + ins.getNwExpect() + "MB");
+        }
+
     }
 
 }

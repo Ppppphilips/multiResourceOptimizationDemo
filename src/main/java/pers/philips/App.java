@@ -13,6 +13,8 @@ public class App
     {
         DeployService ds = new DeployService();
         ds.getAttachSolution();
+        ds.getDetachSolution();
+
     }
 
 }
